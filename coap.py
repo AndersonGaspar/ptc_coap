@@ -88,9 +88,11 @@ class coap:
 		self.opcao_delta = OPTIONS_DELTA.URI_PATH
 		self.opcao_len = len(uri_path)
 		self.opcoes = uri_path
+		self.payload = b''
 
 		#println(self.versao)
-
+		
+		self.quadro = b''
 		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
 		self.quadro += self.codigo.value 
 		self.quadro += self.msg_id 
@@ -109,11 +111,63 @@ class coap:
 		print(data)
 		print(addr)
 
-	def POST(self):
-		pass		
+	def POST(self, uri_path, server_adress, port):
+		self.tipo = TIPOS.CONFIRMAVEL
+		self.codigo = CODIGO_REQUISICAO.POST
+		self.opcao_delta = OPTIONS_DELTA.URI_PATH
+		self.opcao_len = len(uri_path)
+		self.opcoes = uri_path
+		self.payload = b''
 
-	def PUT(self):
-		pass	
+		#println(self.versao)
+		
+		self.quadro = b''
+		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
+		self.quadro += self.codigo.value 
+		self.quadro += self.msg_id 
+		self.quadro += (self.opcao_delta.value[0] << 4 | self.opcao_len).to_bytes(1, byteorder='big') 
+		self.quadro += self.opcoes 
+		self.quadro += self.payload_mac 
+		self.quadro += self.payload
+
+		self.sock.sendto(self.quadro, (server_adress, port))
+
+		print(self.quadro)
+
+
+		data, addr = self.sock.recvfrom(1024)
+
+		print(data)
+		print(addr)		
+
+	def PUT(self, uri_path, server_adress, port):
+		self.tipo = TIPOS.CONFIRMAVEL
+		self.codigo = CODIGO_REQUISICAO.PUT
+		self.opcao_delta = OPTIONS_DELTA.URI_PATH
+		self.opcao_len = len(uri_path)
+		self.opcoes = uri_path
+		self.payload = b'TESTEE'
+
+		#println(self.versao)
+		
+		self.quadro = b''
+		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
+		self.quadro += self.codigo.value 
+		self.quadro += self.msg_id 
+		self.quadro += (self.opcao_delta.value[0] << 4 | self.opcao_len).to_bytes(1, byteorder='big') 
+		self.quadro += self.opcoes 
+		self.quadro += self.payload_mac 
+		self.quadro += self.payload
+
+		self.sock.sendto(self.quadro, (server_adress, port))
+
+		print(self.quadro)
+
+
+		data, addr = self.sock.recvfrom(1024)
+
+		print(data)
+		print(addr)	
 
 	def DELETE(self):
 		pass
