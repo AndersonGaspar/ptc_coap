@@ -69,10 +69,10 @@ class coap:
 	def __init__(self):
 		self.versao = b'\x40' # versao e sempre 40.
 		self.tipo = b'\x00' #
-		self.tkl = b'\x04' # tkl é sempre zero.
+		self.tkl = b'\x00' # tkl é sempre zero.
 		self.codigo = b'\x00'
 		self.msg_id = b'\x23\x59'
-		self.opcao_delta = b'\x00'
+		self.opcao_delta = b'\x03'
 		self.opcao_len = b'\x00'
 		self.opcoes = b'\x00' # campo de valor variavel.
 		#self.payload_mac = b'\xff' # playload_mac e sempre ff.
@@ -85,7 +85,7 @@ class coap:
 	def GET(self, uri_path, server_adress, port):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.GET
-		self.opcao_delta = OPTIONS_DELTA.URI_PATH
+		self.opcao_delta = OPTIONS_DELTA.URI_HOST
 		self.opcao_len = len(uri_path)
 		self.opcoes = uri_path
 		self.payload = b''
