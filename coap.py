@@ -69,13 +69,13 @@ class coap:
 	def __init__(self):
 		self.versao = b'\x40' # versao e sempre 40.
 		self.tipo = b'\x00' #
-		self.tkl = b'\x00' # tkl é sempre zero.
+		self.tkl = b'\x04' # tkl é sempre zero.
 		self.codigo = b'\x00'
 		self.msg_id = b'\x23\x59'
 		self.opcao_delta = b'\x00'
 		self.opcao_len = b'\x00'
 		self.opcoes = b'\x00' # campo de valor variavel.
-		self.payload_mac = b'\xff' # playload_mac e sempre ff.
+		#self.payload_mac = b'\xff' # playload_mac e sempre ff.
 		self.payload = b''
 		self.quadro = b''
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -98,7 +98,7 @@ class coap:
 		self.quadro += self.msg_id 
 		self.quadro += (self.opcao_delta.value[0] << 4 | self.opcao_len).to_bytes(1, byteorder='big') 
 		self.quadro += self.opcoes 
-		self.quadro += self.payload_mac 
+		#self.quadro += self.payload_mac 
 		self.quadro += self.payload
 
 		self.sock.sendto(self.quadro, (server_adress, port))
@@ -127,7 +127,7 @@ class coap:
 		self.quadro += self.msg_id 
 		self.quadro += (self.opcao_delta.value[0] << 4 | self.opcao_len).to_bytes(1, byteorder='big') 
 		self.quadro += self.opcoes 
-		self.quadro += self.payload_mac 
+		#self.quadro += self.payload_mac 
 		self.quadro += self.payload
 
 		self.sock.sendto(self.quadro, (server_adress, port))
@@ -156,7 +156,7 @@ class coap:
 		self.quadro += self.msg_id 
 		self.quadro += (self.opcao_delta.value[0] << 4 | self.opcao_len).to_bytes(1, byteorder='big') 
 		self.quadro += self.opcoes 
-		self.quadro += self.payload_mac 
+		#self.quadro += self.payload_mac 
 		self.quadro += self.payload
 
 		self.sock.sendto(self.quadro, (server_adress, port))
