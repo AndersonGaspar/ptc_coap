@@ -39,6 +39,7 @@ class CODIGO_ERRO_CLIENTE(Enum):
 	PRECONDITION_FAILED =  b'\x8C'
 	REQUEST_ENTITY_TLARGE =  b'\x8D'
 	UNSUPPORTED_FORMAT =  b'\x8F'
+	
 class CODIGO_ERRO_SERVIDOR(Enum):
 	INTERNAL_SERVER_ERR =  b'\xA0'
 	NIMPLEMENT =  b'\xA1'
@@ -72,7 +73,7 @@ class coap:
 		self.tkl = b'\x00' # tkl é sempre zero.
 		self.codigo = b'\x00'
 		self.msg_id = b'\x23\x59'
-		self.opcao_delta = b'\x03'
+		self.opcao_delta = 0
 		self.opcao_len = b'\x00'
 		self.opcoes = b'\x00' # campo de valor variavel.
 		#self.payload_mac = b'\xff' # playload_mac e sempre ff.
@@ -81,35 +82,119 @@ class coap:
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		#self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		#self.sock.bind((socket.gethostname(), 5555))
+		self.codes = {
+			65:"2.01 - Created", 
+			66:"2.02 - Deleted", 
+			67:"2.03 - Valid", 
+			68:"2.04 - Changed", 
+			69:"2.05 - Content", 
+			128:"4.00 - Bad Request", 
+			129:"4.01 - Unauthorized", 
+			130:"4.02 - Bad Option", 
+			131:"4.03 - Forbidden", 
+			132:"4.04 - Not Found", 
+			133:"4.05 - Method Not Allowed", 
+			134:"4.06 - Not Acceptable", 
+			140:"4.12 - Precondition Failed", 
+			141:"4.13 - Request Entity Too Large", 
+			142:"4.14 - Unsupported Content-Format",
+			160:"5.00 - Internal Server Error",
+			161:"5.01 - Not Implemented",
+			162:"5.02 - Bad Gateway",
+			163:"5.03 - Service Unavailable",
+			165:"5.04 - Gateway Timeout",
+			166:"5.05 - Proxying Not Supported"
+		}
 
-	def GET(self, uri_path, server_adress, port):
+	def GET(self, resource, server_adress, port=5683):
+		global codes
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.GET
-		self.opcao_delta = OPTIONS_DELTA.URI_HOST
-		self.opcao_len = len(uri_path)
-		self.opcoes = uri_path
-		self.payload = b''
-
-		#println(self.versao)
 		
 		self.quadro = b''
 		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
 		self.quadro += self.codigo.value 
-		self.quadro += self.msg_id 
-		self.quadro += (self.opcao_delta.value[0] << 4 | self.opcao_len).to_bytes(1, byteorder='big') 
-		self.quadro += self.opcoes 
-		#self.quadro += self.payload_mac 
-		self.quadro += self.payload
-
+		self.quadro += self.msg_id
+		
+		resource_list = resource.split('/')
+		for uri_path in  resource_list:
+			if(self.opcao_delta > 0):
+				self.opcao_delta -= OPTIONS_DELTA.URI_PATH.value[0]
+			else:
+				self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0]
+			if(self.opcao_delta < 0):
+				self.opcao_delta = 0
+				
+			self.quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
+			print(uri_path.encode())
+			self.quadro += str.encode(uri_path)
 		self.sock.sendto(self.quadro, (server_adress, port))
 
-		print(self.quadro)
-
-
 		data, addr = self.sock.recvfrom(1024)
+		resposta = self.receive(data)
 
-		print(data)
-		print(addr)
+		print(self.codes[resposta[1]], resposta[2])
+
+	def receive(self, frame):
+		octeto = frame[0]
+		frame  = frame[1:]
+		versao = octeto & 192
+		tipo = octeto & 48
+		TKL = octeto & 15
+
+		if(tipo != 32):
+			return (-1, None, None)
+
+		codigo = frame[0]
+		frame = frame[1:]
+
+		if(codigo >= 128 and codigo <= 159):
+			return (1, codigo, None)
+		
+		if(codigo >= 160 and codigo < 192):
+			return (1,codigo, None)
+		
+		if(codigo >= 64 and codigo <96):
+			MID = frame[0:2]
+			frame = frame[2:]
+			if(MID != self.msg_id):
+				return (-2, None, None)
+
+			frame = frame[TKL:]
+
+			aux = True
+			while aux:
+				op = frame[0]
+				frame = frame[1:]
+				op_delta = op & 240
+				op_length = op & 15
+				op_delta = op_delta >> 4
+
+				if (op_delta == 13):
+					op_delta = frame[0]
+					frame = frame[1:]
+				if (op_delta == 14):
+					op_delta = frame[0:2]
+					frame = frame[2:]
+				if (op_delta == 15):
+					if (op_length != 15):
+						return (-3, None, None)
+					else:
+						aux = False
+					payload = frame
+
+				if (op_delta < 13):		
+					if (op_length == 13):
+						op_length = frame[0]
+						frame = frame[1:]
+					if (op_length == 14):
+						op_length = frame[0:2]
+						frame = frame[2:]
+					if (op_length == 15):
+						return (-3, None, None)
+					option = frame[0:op_length]
+
+			return (1, codigo, payload)
 
 	def POST(self, uri_path, server_adress, port):
 		self.tipo = TIPOS.CONFIRMAVEL
