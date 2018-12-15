@@ -104,21 +104,92 @@ class coap:
 			166:"5.05 - Proxying Not Supported"
 		}
 
-	def GET(self, resource, server_adress, port=5683):
-		self.tipo = TIPOS.CONFIRMAVEL
-		self.codigo = CODIGO_REQUISICAO.GET
+	def FRAME(self, uri):
+		quadro = b''
+		quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
+		quadro += self.codigo.value 
+		quadro += self.msg_id
+
+		uri =  uri.split('://')
+		protocolo = uri[0]
+		if(protocolo != 'coap'):
+			return -1
 		
-		self.quadro = b''
-		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
-		self.quadro += self.codigo.value 
-		self.quadro += self.msg_id
+		parametros = uri[1].split('/')
+
+		addr = parametros[0].split(':')
+		if(len(addr) > 1):
+			port = int(addr[1])
+			#is_valid = re.match("^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$", addr)
+		else:
+			port = 5683
 		
-		resource_list = resource.split('/')
+		addr = addr[0]
+		a = addr.split('.')
+		for b in a :
+			if(not b.isnumeric()):
+				self.opcao_delta = OPTIONS_DELTA.URI_HOST.value[0] - self.opcao_delta	
+				quadro += (self.opcao_delta << 4 | len(addr)).to_bytes(1, byteorder='big')
+				quadro += str.encode(addr)
+				break
+
+		
+		resource_list = parametros[1:]
 		for uri_path in  resource_list:
 			self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0] - self.opcao_delta	
-			self.quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
-			print(uri_path.encode())
-			self.quadro += str.encode(uri_path)
+			quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
+			quadro += str.encode(uri_path)
+
+		return (quadro, addr, port)
+
+
+
+	def GET(self, uri):
+		self.tipo = TIPOS.CONFIRMAVEL
+		self.codigo = CODIGO_REQUISICAO.GET
+		self.quadro, server_adress, port = self.FRAME(uri)
+		self.sock.sendto(self.quadro, (server_adress, port))
+
+		data, addr = self.sock.recvfrom(1024)
+		print(data)
+		#resposta = self.receive(data)
+
+		#print(self.codes[resposta[1]], resposta[2])
+
+	def POST(self, uri, msg):
+		self.tipo = TIPOS.CONFIRMAVEL
+		self.codigo = CODIGO_REQUISICAO.POST
+		
+		self.quadro, server_adress, port = self.FRAME(uri)
+		self.quadro += self.payload_mac
+		self.quadro += msg.encode()
+		self.sock.sendto(self.quadro, (server_adress, port))
+		data, addr = self.sock.recvfrom(1024)
+		
+		print(data)
+		#resposta = self.receive(data)
+		#print(self.codes[resposta[1]], resposta[2])	
+
+	def PUT(self, uri, msg):
+		self.tipo = TIPOS.CONFIRMAVEL
+		self.codigo = CODIGO_REQUISICAO.PUT
+		
+		self.quadro, server_adress, port = self.FRAME(uri)
+		self.quadro += self.payload_mac
+		self.quadro += msg.encode()
+		self.sock.sendto(self.quadro, (server_adress, port))
+		data, addr = self.sock.recvfrom(1024)
+		
+		print(data)
+		#resposta = self.receive(data)
+		#print(self.codes[resposta[1]], resposta[2])
+	
+
+	def DELETE(self):
+		self.tipo = TIPOS.CONFIRMAVEL
+		self.codigo = CODIGO_REQUISICAO.DELETE
+		
+		self.quadro = self.FRAME(resource)
 		self.sock.sendto(self.quadro, (server_adress, port))
 
 		data, addr = self.sock.recvfrom(1024)
@@ -187,79 +258,3 @@ class coap:
 					option = frame[0:op_length]
 
 			return (1, codigo, payload)
-
-	def POST(self, resource, entrada, server_adress, port):
-		self.tipo = TIPOS.CONFIRMAVEL
-		self.codigo = CODIGO_REQUISICAO.POST
-		
-		self.quadro = b''
-		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
-		self.quadro += self.codigo.value 
-		self.quadro += self.msg_id
-		
-		resource_list = resource.split('/')
-		for uri_path in  resource_list:
-			self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0] - self.opcao_delta	
-			self.quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
-			print(uri_path.encode())
-			self.quadro += str.encode(uri_path)
-
-		self.quadro += self.payload_mac
-		self.quadro += entrada.encode()
-		self.sock.sendto(self.quadro, (server_adress, port))
-		data, addr = self.sock.recvfrom(1024)
-		
-		print(data)
-		#resposta = self.receive(data)
-		#print(self.codes[resposta[1]], resposta[2])	
-
-	def PUT(self, resource, entrada, server_adress, port):
-		self.tipo = TIPOS.CONFIRMAVEL
-		self.codigo = CODIGO_REQUISICAO.PUT
-		
-		self.quadro = b''
-		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
-		self.quadro += self.codigo.value 
-		self.quadro += self.msg_id
-		
-		resource_list = resource.split('/')
-		for uri_path in  resource_list:
-			self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0] - self.opcao_delta	
-			self.quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
-			print(uri_path.encode())
-			self.quadro += str.encode(uri_path)
-
-		self.quadro += self.payload_mac
-		self.quadro += entrada.encode()
-		self.sock.sendto(self.quadro, (server_adress, port))
-		data, addr = self.sock.recvfrom(1024)
-		
-		print(data)
-		#resposta = self.receive(data)
-		#print(self.codes[resposta[1]], resposta[2])
-	
-
-	def DELETE(self):
-		self.tipo = TIPOS.CONFIRMAVEL
-		self.codigo = CODIGO_REQUISICAO.DELETE
-		
-		self.quadro = b''
-		self.quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
-		self.quadro += self.codigo.value 
-		self.quadro += self.msg_id
-		
-		resource_list = resource.split('/')
-		for uri_path in  resource_list:
-			self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0] - self.opcao_delta	
-			self.quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
-			print(uri_path.encode())
-			self.quadro += str.encode(uri_path)
-
-		self.quadro += self.payload_mac
-		self.quadro += entrada.encode()
-		self.sock.sendto(self.quadro, (server_adress, port))
-		data, addr = self.sock.recvfrom(1024)
-		
-		print(data)
-		#resposta = self.receive(data)
-		#print(self.codes[resposta[1]], resposta[2])
