@@ -66,6 +66,8 @@ class OPTIONS_DELTA(Enum):
 	PROXY_SCHEME =  b'\x27'
 	SIZE1 = B'\x3C'
 
+
+
 class coap:
 
 	def __init__(self):
@@ -157,7 +159,6 @@ class coap:
 		return (quadro, addr, port)
 
 
-
 	def GET(self, uri, token=b''):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.GET
@@ -170,9 +171,9 @@ class coap:
 
 		data, addr = self.sock.recvfrom(1024)
 		resposta = self.receive(data)
-		print(self.codes[resposta[1]], resposta[2])
+		print(resposta[1], resposta[2],resposta[3])   #aplicacao que se vira com o numero
 
-		return(resposta)
+		return(resposta[1:])
 
 	def POST(self, uri, msg):
 		self.tipo = TIPOS.CONFIRMAVEL
@@ -218,31 +219,31 @@ class coap:
 		versao = octeto & 192
 		tipo = octeto & 48
 		TKL = octeto & 15
-
+	
 		if(tipo != 32):
-			return (-1, None, None)
+			return (-1, None, None, None)
 
 		codigo = frame[0]
 		frame = frame[1:]
 
 		if(codigo >= 128 and codigo <= 159):
-			return (1, codigo, None)
+			return (1, codigo, None, None)
 		
 		if(codigo >= 160 and codigo < 192):
-			return (1,codigo, None)
+			return (1,codigo, None, None)
 		
 		if(codigo >= 64 and codigo <96):
 			MID = frame[0:2]
 			frame = frame[2:]
 			if(MID != self.msg_id):
-				return (-2, None, None)
+				return (-2, None, None, None)
 
 			token = frame[0:TKL]
 			frame = frame[TKL:]
 
 			aux = True
 
-			payload = self.delta_separator(frame)			
+			payload,descritor = self.delta_separator(frame)			
 			# while aux:
 			# 	op = frame[0]
 			# 	frame = frame[1:]
@@ -277,11 +278,12 @@ class coap:
 			# 		print(op_length)
 			# 		option = frame[0:op_length]
 
-			return (1, codigo, payload)
+			return (1, codigo, payload,descritor)
 
 	def delta_separator(self, frame):
 
 		aux = True
+		descriptor = []
 
 		while aux:
 			op = frame[0]
@@ -289,23 +291,29 @@ class coap:
 			op_delta = op & 240
 			op_length = op & 15
 			op_delta = op_delta >> 4
-			print(op_delta)
+			#print(op_delta)
 			if(op_delta < 13):
 				if (op_length == 13):
 					op_length = frame[0]
 					op_length = ord(op_length) + 13
 					option = frame[0:op_length]
 					frame = frame[1:]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 				elif (op_length == 14):
 					op_length = frame[0:2]
-					print(int.from_bytes(op_length, byteorder='big'))
+					#print(int.from_bytes(op_length, byteorder='big'))
 					op_length = int.from_bytes(op_length, byteorder='big') + 269
 					option = frame[0:op_length]
 					frame = fame[2:]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 				elif (op_length == 15):
-					return ('ERRO')
+					return ('ERRO', None)
 				else:
 					option = frame[0:op_length]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 					frame = frame[op_length:]
 			
 			elif (op_delta == 13):
@@ -317,17 +325,23 @@ class coap:
 					op_length = ord(op_length) + 13
 					option = frame[0:op_length]
 					frame = frame[1:]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 				elif (op_length == 14):
 					op_length = frame[0:2]
-					print(int.from_bytes(op_length, byteorder='big'))
+					#print(int.from_bytes(op_length, byteorder='big'))
 					op_length = int.from_bytes(op_length, byteorder='big') + 269
 					option = frame[0:op_length]
 					frame = frame[2:]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 				elif (op_length == 15):
-					return ('ERRO')
+					return ('ERRO', None)
 				else:
 					option = frame[0:op_length]
 					frame = frame[op_length:]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 
 			elif (op_delta == 14):
 				op_delta = frame[0:2]
@@ -340,20 +354,24 @@ class coap:
 					frame = frame[1:]
 				elif (op_length == 14):
 					op_length = frame[0:2]
-					print(int.from_bytes(op_length, byteorder='big'))
+					#print(int.from_bytes(op_length, byteorder='big'))
 					op_length = int.from_bytes(op_length, byteorder='big') + 269
 					option = frame[0:op_length]
 					frame = frame[2:]
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
 				elif (op_length == 15):
-					return ('ERRO')
+					return ('ERRO', None)
 				else:
 					option = frame[0:op_length]
 					frame = frame[op_length:]
-
+					descriptor.append(((op_delta + self.delta_anterior),option))
+					self.delta_anterior = op_delta
+					
 			elif (op_delta == 15):
 				if (op_length != 15):
-					return ('ERRO')
+					return (b'ERRO', None)
 				else:
 					aux = False
 		
-		return (frame)
+		return (frame,descriptor)
