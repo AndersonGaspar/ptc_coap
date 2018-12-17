@@ -171,47 +171,43 @@ class coap:
 
 		data, addr = self.sock.recvfrom(1024)
 		resposta = self.receive(data)
-		print(resposta[1], resposta[2],resposta[3])   #aplicacao que se vira com o numero
 
 		return(resposta[1:])
 
-	def POST(self, uri, msg):
+	def POST(self, uri, msg, token=b''):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.POST
 		
-		self.quadro, server_adress, port = self.FRAME(uri, msg)
+		self.quadro, server_adress, port = self.FRAME(uri, msg, token)
 		self.sock.sendto(self.quadro, (server_adress, port))
 		data, addr = self.sock.recvfrom(1024)
-		
-		print(data)
-		#resposta = self.receive(data)
-		#print(self.codes[resposta[1]], resposta[2])	
+		resposta = self.receive(data)
 
-	def PUT(self, uri, msg):
+		return(resposta[1:])
+			
+
+	def PUT(self, uri, msg, token=b''):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.PUT
 		
-		self.quadro, server_adress, port = self.FRAME(uri, msg)
+		self.quadro, server_adress, port = self.FRAME(uri, msg, token)
 		self.sock.sendto(self.quadro, (server_adress, port))
 		data, addr = self.sock.recvfrom(1024)
-		
-		print(data)
-		#resposta = self.receive(data)
-		#print(self.codes[resposta[1]], resposta[2])
+		resposta = self.receive(data)
+
+		return(resposta[1:])
 	
 
-	def DELETE(self):
+	def DELETE(self, uri, msg, token=b''):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.DELETE
 		
-		self.quadro = self.FRAME(resource)
+		self.quadro, server_adress, port = self.FRAME(uri, token=token)
 		self.sock.sendto(self.quadro, (server_adress, port))
-
 		data, addr = self.sock.recvfrom(1024)
-		print(data)
-		#resposta = self.receive(data)
+		resposta = self.receive(data)
 
-		#print(self.codes[resposta[1]], resposta[2])
+		return(resposta[1:])
 
 	def receive(self, frame):
 		octeto = frame[0]
@@ -244,39 +240,6 @@ class coap:
 			aux = True
 
 			payload,descritor = self.delta_separator(frame)			
-			# while aux:
-			# 	op = frame[0]
-			# 	frame = frame[1:]
-			# 	op_delta = op & 240
-			# 	op_length = op & 15
-			# 	op_delta = op_delta >> 4
-
-			# 	if (op_delta == 13):
-			# 		op_delta = frame[0]
-			# 		frame = frame[1:]
-			# 	if (op_delta == 14):
-			# 		op_delta = frame[0:2]
-			# 		frame = frame[2:]
-			# 	if (op_delta == 15):
-			# 		if (op_length != 15):
-			# 			return (-3, None, None)
-			# 		else:
-			# 			aux = False
-			# 		payload = frame
-
-				
-			# 	if (op_delta < 13):
-			# 		print(op_length)
-			# 		if (op_length == 13):
-			# 			op_length = frame[0]
-			# 			frame = frame[1:]
-			# 		if (op_length == 14):
-			# 			op_length = int.from_bytes(frame[0:2], byteorder='big')
-			# 			frame = frame[2:]
-			# 		if (op_length == 15):
-			# 			return (-3, None, None)
-			# 		print(op_length)
-			# 		option = frame[0:op_length]
 
 			return (1, codigo, payload,descritor)
 
@@ -373,5 +336,5 @@ class coap:
 					return (b'ERRO', None)
 				else:
 					aux = False
-		
+		self.delta_anterior = 0
 		return (frame,descriptor)
