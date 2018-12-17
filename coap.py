@@ -6,6 +6,7 @@ import random
 import struct
 import sys
 import socket
+import random
 from enum import Enum
 
 class TIPOS(Enum):
@@ -70,9 +71,10 @@ class coap:
 	def __init__(self):
 		self.versao = b'\x40' # versao e sempre 40.
 		self.tipo = b'\x00' #
-		self.tkl = b'\x00' # tkl é sempre zero.
+		self.tkl = 0 # tkl
+		self.token = b''
 		self.codigo = b'\x00'
-		self.msg_id = b'\x23\x59'
+		self.msg_id = b'\x00\x00'
 		self.opcao_delta = 0
 		self.delta_anterior = 0
 		self.opcao_len = b'\x00'
@@ -105,11 +107,14 @@ class coap:
 			166:"5.05 - Proxying Not Supported"
 		}
 
-	def FRAME(self, uri, msg=None):
+	def FRAME(self, uri, msg=None, token=b''):
 		quadro = b''
-		quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
-		quadro += self.codigo.value 
+		self.tkl = len(token)
+		quadro = (self.versao[0] | self.tipo.value[0] | self.tkl).to_bytes(1, byteorder='big') 
+		quadro += self.codigo.value
+		self.msg_id = random.randint(0, (2**16)-1).to_bytes(2, byteorder='big')
 		quadro += self.msg_id
+		quadro += token
 
 		uri =  uri.split('://')
 		protocolo = uri[0]
@@ -145,22 +150,25 @@ class coap:
 			quadro += str.encode(uri_path)
 
 		if(msg != None):
-			self.quadro += self.payload_mac
-			self.quadro += msg.encode()
+			quadro += self.payload_mac
+			quadro += msg.encode()
 
 		self.delta_anterior = 0
 		return (quadro, addr, port)
 
 
 
-	def GET(self, uri):
+	def GET(self, uri, token=b''):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.GET
-		self.quadro, server_adress, port = self.FRAME(uri)
+
+		if(len(token) > 8):
+			return ('Erro Token maior que 8 bytes.')
+
+		self.quadro, server_adress, port = self.FRAME(uri, token=token)
 		self.sock.sendto(self.quadro, (server_adress, port))
 
 		data, addr = self.sock.recvfrom(1024)
-		print(data)
 		resposta = self.receive(data)
 		print(self.codes[resposta[1]], resposta[2])
 
@@ -170,7 +178,7 @@ class coap:
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.POST
 		
-		self.quadro, server_adress, port = self.FRAME(uri)
+		self.quadro, server_adress, port = self.FRAME(uri, msg)
 		self.sock.sendto(self.quadro, (server_adress, port))
 		data, addr = self.sock.recvfrom(1024)
 		
@@ -182,7 +190,7 @@ class coap:
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.PUT
 		
-		self.quadro, server_adress, port = self.FRAME(uri)
+		self.quadro, server_adress, port = self.FRAME(uri, msg)
 		self.sock.sendto(self.quadro, (server_adress, port))
 		data, addr = self.sock.recvfrom(1024)
 		
@@ -229,38 +237,123 @@ class coap:
 			if(MID != self.msg_id):
 				return (-2, None, None)
 
+			token = frame[0:TKL]
 			frame = frame[TKL:]
 
 			aux = True
-			while aux:
-				op = frame[0]
-				frame = frame[1:]
-				op_delta = op & 240
-				op_length = op & 15
-				op_delta = op_delta >> 4
 
-				if (op_delta == 13):
-					op_delta = frame[0]
-					frame = frame[1:]
-				if (op_delta == 14):
-					op_delta = frame[0:2]
-					frame = frame[2:]
-				if (op_delta == 15):
-					if (op_length != 15):
-						return (-3, None, None)
-					else:
-						aux = False
-					payload = frame
+			payload = self.delta_separator(frame)			
+			# while aux:
+			# 	op = frame[0]
+			# 	frame = frame[1:]
+			# 	op_delta = op & 240
+			# 	op_length = op & 15
+			# 	op_delta = op_delta >> 4
 
-				if (op_delta < 13):		
-					if (op_length == 13):
-						op_length = frame[0]
-						frame = frame[1:]
-					if (op_length == 14):
-						op_length = frame[0:2]
-						frame = frame[2:]
-					if (op_length == 15):
-						return (-3, None, None)
-					option = frame[0:op_length]
+			# 	if (op_delta == 13):
+			# 		op_delta = frame[0]
+			# 		frame = frame[1:]
+			# 	if (op_delta == 14):
+			# 		op_delta = frame[0:2]
+			# 		frame = frame[2:]
+			# 	if (op_delta == 15):
+			# 		if (op_length != 15):
+			# 			return (-3, None, None)
+			# 		else:
+			# 			aux = False
+			# 		payload = frame
+
+				
+			# 	if (op_delta < 13):
+			# 		print(op_length)
+			# 		if (op_length == 13):
+			# 			op_length = frame[0]
+			# 			frame = frame[1:]
+			# 		if (op_length == 14):
+			# 			op_length = int.from_bytes(frame[0:2], byteorder='big')
+			# 			frame = frame[2:]
+			# 		if (op_length == 15):
+			# 			return (-3, None, None)
+			# 		print(op_length)
+			# 		option = frame[0:op_length]
 
 			return (1, codigo, payload)
+
+	def delta_separator(self, frame):
+
+		aux = True
+
+		while aux:
+			op = frame[0]
+			frame = frame[1:]
+			op_delta = op & 240
+			op_length = op & 15
+			op_delta = op_delta >> 4
+			print(op_delta)
+			if(op_delta < 13):
+				if (op_length == 13):
+					op_length = frame[0]
+					op_length = ord(op_length) + 13
+					option = frame[0:op_length]
+					frame = frame[1:]
+				elif (op_length == 14):
+					op_length = frame[0:2]
+					print(int.from_bytes(op_length, byteorder='big'))
+					op_length = int.from_bytes(op_length, byteorder='big') + 269
+					option = frame[0:op_length]
+					frame = fame[2:]
+				elif (op_length == 15):
+					return ('ERRO')
+				else:
+					option = frame[0:op_length]
+					frame = frame[op_length:]
+			
+			elif (op_delta == 13):
+				op_delta = frame[0]
+				frame = frame[1:] 
+
+				if (op_length == 13):
+					op_length = frame[0]
+					op_length = ord(op_length) + 13
+					option = frame[0:op_length]
+					frame = frame[1:]
+				elif (op_length == 14):
+					op_length = frame[0:2]
+					print(int.from_bytes(op_length, byteorder='big'))
+					op_length = int.from_bytes(op_length, byteorder='big') + 269
+					option = frame[0:op_length]
+					frame = frame[2:]
+				elif (op_length == 15):
+					return ('ERRO')
+				else:
+					option = frame[0:op_length]
+					frame = frame[op_length:]
+
+			elif (op_delta == 14):
+				op_delta = frame[0:2]
+				frame = frame[2:]
+				
+				if (op_length == 13):
+					op_length = frame[0]
+					op_length = ord(op_length) + 13
+					option = frame[0:op_length]
+					frame = frame[1:]
+				elif (op_length == 14):
+					op_length = frame[0:2]
+					print(int.from_bytes(op_length, byteorder='big'))
+					op_length = int.from_bytes(op_length, byteorder='big') + 269
+					option = frame[0:op_length]
+					frame = frame[2:]
+				elif (op_length == 15):
+					return ('ERRO')
+				else:
+					option = frame[0:op_length]
+					frame = frame[op_length:]
+
+			elif (op_delta == 15):
+				if (op_length != 15):
+					return ('ERRO')
+				else:
+					aux = False
+		
+		return (frame)

@@ -13,5 +13,5 @@ c = coap.coap()
 
 c.PUT(sys.argv[1], sys.argv[2])
 #print(sys.argv[1])
-c.GET(sys.argv[1])
+c.GET(sys.argv[1], b'\x13')
 #print(sys.argv[1])
