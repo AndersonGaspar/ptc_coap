@@ -74,6 +74,7 @@ class coap:
 		self.codigo = b'\x00'
 		self.msg_id = b'\x23\x59'
 		self.opcao_delta = 0
+		self.delta_anterior = 0
 		self.opcao_len = b'\x00'
 		self.opcoes = b'\x00' # campo de valor variavel.
 		self.payload_mac = b'\xff' # playload_mac e sempre ff.
@@ -104,7 +105,7 @@ class coap:
 			166:"5.05 - Proxying Not Supported"
 		}
 
-	def FRAME(self, uri):
+	def FRAME(self, uri, msg=None):
 		quadro = b''
 		quadro = (self.versao[0] | self.tipo.value[0] | self.tkl[0]).to_bytes(1, byteorder='big') 
 		quadro += self.codigo.value 
@@ -112,6 +113,7 @@ class coap:
 
 		uri =  uri.split('://')
 		protocolo = uri[0]
+
 		if(protocolo != 'coap'):
 			return -1
 		
@@ -128,7 +130,8 @@ class coap:
 		a = addr.split('.')
 		for b in a :
 			if(not b.isnumeric()):
-				self.opcao_delta = OPTIONS_DELTA.URI_HOST.value[0] - self.opcao_delta	
+				self.opcao_delta = OPTIONS_DELTA.URI_HOST.value[0] - self.delta_anterior
+				self.delta_anterior = OPTIONS_DELTA.URI_HOST.value[0]
 				quadro += (self.opcao_delta << 4 | len(addr)).to_bytes(1, byteorder='big')
 				quadro += str.encode(addr)
 				break
@@ -136,10 +139,16 @@ class coap:
 		
 		resource_list = parametros[1:]
 		for uri_path in  resource_list:
-			self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0] - self.opcao_delta	
+			self.opcao_delta = OPTIONS_DELTA.URI_PATH.value[0] - self.delta_anterior
+			self.delta_anterior = OPTIONS_DELTA.URI_PATH.value[0]
 			quadro += (self.opcao_delta << 4 | len(uri_path)).to_bytes(1, byteorder='big')
 			quadro += str.encode(uri_path)
 
+		if(msg != None):
+			self.quadro += self.payload_mac
+			self.quadro += msg.encode()
+
+		self.delta_anterior = 0
 		return (quadro, addr, port)
 
 
@@ -152,17 +161,16 @@ class coap:
 
 		data, addr = self.sock.recvfrom(1024)
 		print(data)
-		#resposta = self.receive(data)
+		resposta = self.receive(data)
+		print(self.codes[resposta[1]], resposta[2])
 
-		#print(self.codes[resposta[1]], resposta[2])
+		return(resposta)
 
 	def POST(self, uri, msg):
 		self.tipo = TIPOS.CONFIRMAVEL
 		self.codigo = CODIGO_REQUISICAO.POST
 		
 		self.quadro, server_adress, port = self.FRAME(uri)
-		self.quadro += self.payload_mac
-		self.quadro += msg.encode()
 		self.sock.sendto(self.quadro, (server_adress, port))
 		data, addr = self.sock.recvfrom(1024)
 		
@@ -175,8 +183,6 @@ class coap:
 		self.codigo = CODIGO_REQUISICAO.PUT
 		
 		self.quadro, server_adress, port = self.FRAME(uri)
-		self.quadro += self.payload_mac
-		self.quadro += msg.encode()
 		self.sock.sendto(self.quadro, (server_adress, port))
 		data, addr = self.sock.recvfrom(1024)
 		

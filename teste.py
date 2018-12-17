@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import coap
 import os
 import sys
@@ -10,4 +12,6 @@ c = coap.coap()
 # argv[4] -> Payload
 
 c.PUT(sys.argv[1], sys.argv[2])
+#print(sys.argv[1])
 c.GET(sys.argv[1])
+#print(sys.argv[1])
